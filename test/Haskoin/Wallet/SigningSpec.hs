@@ -43,7 +43,7 @@ buildWalletTxSpec ctx =
             ]
           change = iAddr' 0
           rcps = [(oAddr' 0, 200000000), (oAddr' 1, 200000000)]
-          resE = buildWalletTx btc ctx gen rcps change coins 314 10000 False
+          resE = buildWalletTx btc ctx gen rcps change coins [] 314 10000 False
       (fst <$> resE)
         `shouldBe` Right
           ( tx'
@@ -62,7 +62,7 @@ buildWalletTxSpec ctx =
             ]
           change = iAddr' 0
           rcps = [(oAddr' 0, 500000000), (oAddr' 1, 500000000)]
-          resE = buildWalletTx btc ctx gen rcps change coins 1 10000 False
+          resE = buildWalletTx btc ctx gen rcps change coins [] 1 10000 False
       resE `shouldBe` Left "chooseCoins: No solution found"
     it "will drop the change output if it is dust" $ do
       let coins =
@@ -73,9 +73,9 @@ buildWalletTxSpec ctx =
             ]
           change = iAddr' 0
           rcps = [(oAddr' 0, 500000000), (oAddr' 1, 499990000)]
-          resE1 = buildWalletTx btc ctx gen rcps change coins 0 9999 False
-          resE2 = buildWalletTx btc ctx gen rcps change coins 0 10000 False
-          resE3 = buildWalletTx btc ctx gen rcps change coins 1 9999 False
+          resE1 = buildWalletTx btc ctx gen rcps change coins [] 0 9999 False
+          resE2 = buildWalletTx btc ctx gen rcps change coins [] 0 10000 False
+          resE3 = buildWalletTx btc ctx gen rcps change coins [] 1 9999 False
       (fst <$> resE1)
         `shouldBe` Right
           ( tx'
@@ -106,7 +106,7 @@ buildWalletTxSpec ctx =
             ]
           change = iAddr' 0
           rcps = [(oAddr' 0, 500000000), (oAddr' 1, 10000)]
-          resE = buildWalletTx btc ctx gen rcps change coins 1 10000 False
+          resE = buildWalletTx btc ctx gen rcps change coins [] 1 10000 False
       resE `shouldBe` Left "Recipient output is smaller than the dust value"
     it "can make the recipient pay for the fees" $ do
       let coins =
@@ -117,7 +117,7 @@ buildWalletTxSpec ctx =
             ]
           change = iAddr' 0
           rcps = [(oAddr' 0, 200000000), (oAddr' 1, 200000000)]
-          resE = buildWalletTx btc ctx gen rcps change coins 314 10000 True
+          resE = buildWalletTx btc ctx gen rcps change coins [] 314 10000 True
       (fst <$> resE)
         `shouldBe` Right
           ( tx'
@@ -140,9 +140,9 @@ buildWalletTxSpec ctx =
             rcps1 = [(oAddr' 0, 400000000), (oAddr' 1, 87291)] -- fee is 2*87292
             rcps2 = [(oAddr' 0, 400000000), (oAddr' 1, 87292)]
             rcps3 = [(oAddr' 0, 400000000), (oAddr' 1, 97293)]
-            resE1 = buildWalletTx btc ctx gen rcps1 change coins 314 10000 True
-            resE2 = buildWalletTx btc ctx gen rcps2 change coins 314 10000 True
-            resE3 = buildWalletTx btc ctx gen rcps3 change coins 314 10000 True
+            resE1 = buildWalletTx btc ctx gen rcps1 change coins [] 314 10000 True
+            resE2 = buildWalletTx btc ctx gen rcps2 change coins [] 314 10000 True
+            resE3 = buildWalletTx btc ctx gen rcps3 change coins [] 314 10000 True
         resE1 `shouldBe` Left "Recipients can't pay for the fee"
         resE2 `shouldBe` Left "Recipient output is smaller than the dust value"
         (fst <$> resE3)
@@ -152,6 +152,89 @@ buildWalletTxSpec ctx =
                 [(txid' 1, 2), (txid' 1, 1), (txid' 1, 0)]
                 ((oAddr' 1, 10001) : (change, 199902707) : [(oAddr' 0, 399912708)])
             )
+    it "can select coin control" $ do
+      let coins =
+            [ coin' ctx (txid' 1, 0) Nothing (addr' 0) 100000000,
+              coin' ctx (txid' 1, 1) Nothing (addr' 1) 200000000,
+              coin' ctx (txid' 1, 2) Nothing (addr' 2) 300000000,
+              coin' ctx (txid' 1, 3) Nothing (addr' 3) 400000000,
+              coin' ctx (txid' 1, 4) Nothing (addr' 4) 100000000,
+              coin' ctx (txid' 1, 5) Nothing (addr' 5) 200000000,
+              coin' ctx (txid' 1, 6) Nothing (addr' 6) 300000000,
+              coin' ctx (txid' 1, 7) Nothing (addr' 7) 400000000,
+              coin' ctx (txid' 1, 8) Nothing (addr' 8) 100000000,
+              coin' ctx (txid' 1, 9) Nothing (addr' 9) 200000000
+            ]
+          control = [OutPoint (txid' 1) 6]
+          control2 = [OutPoint (txid' 1) 3]
+          control3 = [OutPoint (txid' 1) 4]
+          control4 = [OutPoint (txid' 1) 2, OutPoint (txid' 1) 3]
+          control5 = [OutPoint (txid' 1) 3, OutPoint (txid' 1) 8, OutPoint (txid' 1) 9]
+          change = iAddr' 0
+          rcps = [(oAddr' 0, 100000000)]
+          rcps5 = [(oAddr' 0, 1300000000)]
+          resE = buildWalletTx btc ctx gen rcps change coins control 314 10000 False
+          resE2 = buildWalletTx btc ctx gen rcps change coins control2 314 10000 False
+          resE3 = buildWalletTx btc ctx gen rcps change coins control3 314 10000 False
+          resE4 = buildWalletTx btc ctx gen rcps change coins control4 314 10000 False
+          resE5 = buildWalletTx btc ctx gen rcps5 change coins control5 314 10000 False
+      (fst <$> resE)
+        `shouldBe` Right
+          ( tx'
+              ctx
+              [(txid' 1, 6)] -- Selected coins
+              [head rcps, (change, 199929036)]
+          )
+      (snd <$> resE)
+        `shouldBe` Right [coins !! 6]
+      (fst <$> resE2)
+        `shouldBe` Right
+          ( tx'
+              ctx
+              [(txid' 1, 3)] -- Selected coins
+              [head rcps, (change, 299929036)]
+          )
+      (snd <$> resE2)
+        `shouldBe` Right [coins !! 3]
+      (fst <$> resE3)
+        `shouldBe` Right
+          ( tx'
+              ctx
+              [(txid' 1, 9),(txid' 1, 4)] -- Selected coins
+              [head rcps, (change, 199882564)]
+          )
+      (snd <$> resE3)
+        `shouldBe` Right [coins !! 9, coins !! 4]
+      (fst <$> resE4)
+        `shouldBe` Right
+          ( tx'
+              ctx
+              [(txid' 1, 2)] -- Only one coin was selected
+              [head rcps, (change, 199929036)]
+          )
+      (snd <$> resE4)
+        `shouldBe` Right [coins !! 2]
+      (fst <$> resE5)
+        `shouldBe` Right
+          ( tx'
+              ctx
+              [ (txid' 1, 7),
+                (txid' 1, 2),
+                (txid' 1, 1),
+                (txid' 1, 0),
+                (txid' 1, 9),
+                (txid' 1, 8),
+                (txid' 1, 3) ] -- Selected coins
+              [head rcps5, (change, 399650204)]
+          )
+      (snd <$> resE5)
+        `shouldBe` Right [ coins !! 7,
+                           coins !! 2,
+                           coins !! 1,
+                           coins !! 0,
+                           coins !! 9,
+                           coins !! 8,
+                           coins !! 3 ]
 
 signWalletTxSpec :: Ctx -> Spec
 signWalletTxSpec ctx =

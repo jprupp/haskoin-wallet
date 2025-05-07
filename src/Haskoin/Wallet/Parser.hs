@@ -76,7 +76,8 @@ data Command
         commandDust :: !Natural,
         commandRcptPay :: !Bool,
         commandMinConf :: !Natural,
-        commandOutputFileMaybe :: !(Maybe FilePath)
+        commandOutputFileMaybe :: !(Maybe FilePath),
+        commandCoins :: ![(TxHash, Natural)]
       }
   | CommandPendingTxs
       { commandMaybeAcc :: !(Maybe Text),
@@ -637,6 +638,7 @@ prepareTxParser = do
           <*> rcptPayOption
           <*> minConfOption
           <*> outputFileMaybeOption
+          <*> some coinOption
   info cmd $
     progDesc "Prepare an unsigned transaction for making a payment"
       <> footer
@@ -678,6 +680,18 @@ Recipient amount. By default, amounts are parsed as bitcoins. You can also use t
 have up to 8 decimal places, bits up to 2 and satoshi are whole numbers.
 |]
 
+coinOption :: Parser (TxHash, Natural)
+coinOption =
+  option (maybeReader f) $
+  short 'c' <>
+  long "coin" <>
+  metavar "TXHASH INT" <> help "Coin control: specify coins to spend"
+  where
+    f s =
+      case words s of
+        [a, b] -> (,) <$> hexToTxHash (cs a) <*> readNatural (cs b)
+        _ -> Nothing
+
 feeOption :: Parser Natural
 feeOption =
   option (maybeReader $ readNatural . cs) $
@@ -709,7 +723,7 @@ rcptPayOption =
 minConfOption :: Parser Natural
 minConfOption =
   option (maybeReader $ readNatural . cs) $
-    short 'c'
+    short 'm'
       <> long "minconf"
       <> metavar "INT"
       <> value 1

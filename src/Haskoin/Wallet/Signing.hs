@@ -13,7 +13,7 @@ import Control.Monad.State
 import qualified Data.ByteString as BS
 import Data.Default (def)
 import Data.Either (rights)
-import Data.List (nub)
+import Data.List (nub, partition)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import Data.Word (Word64)
@@ -42,8 +42,9 @@ buildTxSignData ::
   Natural ->
   Bool ->
   Natural ->
+  [OutPoint] ->
   ExceptT String (DB m) TxSignData
-buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf
+buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf coinControl
   | null rcpts = throwError "No recipients provided"
   | otherwise = do
       -- Get all spendable coins in the account
@@ -54,7 +55,7 @@ buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf
       -- Build a transaction and pick the coins
       (tx, pickedCoins) <-
         liftEither $
-          buildWalletTx net ctx gen rcpts change allCoins feeByte dust rcptPay
+          buildWalletTx net ctx gen rcpts change allCoins coinControl feeByte dust rcptPay
       -- Get the derivations of our recipients and picked coins
       rcptsDerivsE <- mapM (lift . getAddrDeriv net accId) $ fst <$> rcpts
       let rcptsDerivs = rights rcptsDerivsE -- It's OK to fail here
@@ -71,6 +72,19 @@ buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf
       -- Return the result
       return $ TxSignData tx depTxs (nub inDerivs) (nub outDerivs) False
 
+updateControlCoins ::
+     [Store.Unspent]
+  -> [OutPoint]
+  -> Either String ([Store.Unspent], [Store.Unspent])
+updateControlCoins allCoins [] = return ([], allCoins)
+updateControlCoins allCoins control
+  | length l < length control =
+    Left "Selected coin does not exist or is not spendable"
+  | otherwise = return (l, r)
+  where
+    (l, r) =
+      partition (\(Store.Unspent _ op _ _ _) -> op `elem` control) allCoins
+
 buildWalletTx ::
   Network ->
   Ctx ->
@@ -78,15 +92,18 @@ buildWalletTx ::
   [(Address, Natural)] -> -- recipients
   Address -> -- change
   [Store.Unspent] -> -- Coins to choose from
+  [OutPoint] ->
   Natural -> -- Fee per byte
   Natural -> -- Dust
   Bool -> -- Recipients Pay for Fee
   Either String (Tx, [Store.Unspent])
-buildWalletTx net ctx gen rcptsN change coins feeByteN dustN rcptPay =
+buildWalletTx net ctx gen rcptsN change coins coinControl feeByteN dustN rcptPay =
   flip evalStateT gen $ do
-    rdmCoins <- randomShuffle coins
+    -- If coin control was used, move those coins to the front
+    (l,r) <- lift $ updateControlCoins coins $ nub coinControl
+    rdmCoins <- randomShuffle r
     (pickedCoins, changeAmnt) <-
-      lift $ chooseCoins tot feeCoinSel (length rcptsN + 1) False rdmCoins
+      lift $ chooseCoins tot feeCoinSel (length rcptsN + 1) False (l ++ rdmCoins)
     let nOuts =
           if changeAmnt <= dust
             then length rcptsN

@@ -324,8 +324,8 @@ commandResponse ctx cfg unit cmd =
     CommandLabel nameM i l -> cmdLabel cfg nameM i l
     -- Transaction management
     CommandTxs nameM p -> cmdTxs ctx cfg nameM p
-    CommandPrepareTx rcpts nameM fee dust rcptPay minConf o ->
-      cmdPrepareTx ctx cfg rcpts nameM unit fee dust rcptPay minConf o
+    CommandPrepareTx rcpts nameM fee dust rcptPay minConf o coins ->
+      cmdPrepareTx ctx cfg rcpts nameM unit fee dust rcptPay minConf o coins
     CommandPendingTxs nameM p -> cmdPendingTxs ctx cfg nameM p
     CommandSignTx nameM h i o s -> cmdSignTx ctx cfg nameM h i o s
     CommandSendTx h -> cmdSendTx ctx cfg h
@@ -489,15 +489,18 @@ cmdPrepareTx ::
   Bool ->
   Natural ->
   Maybe FilePath ->
+  [(TxHash, Natural)] ->
   IO Response
-cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM =
+cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM coins =
   runDBResponse cfg $ do
     (accId, acc) <- getAccountByName nameM
     let net = accountNetwork acc
         pub = accountXPubKey ctx acc
+        cControl = (\(a,b) -> OutPoint a (fromIntegral b)) <$> coins
     rcpts <- liftEither $ mapM (toRecipient net) rcpTxt
     gen <- liftIO initStdGen
-    signDat <- buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf
+    signDat <-
+      buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf cControl
     txInfo <- liftEither $ parseTxSignData net ctx pub signDat
     txInfoL <- lift $ fillTxInfoLabels net txInfo
     for_ fileM checkPathFree
@@ -510,8 +513,7 @@ cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM =
       addr <- textToAddrE net a
       val <- maybeToEither (cs $ badAmnt v) (readAmount unit v)
       return (addr, val)
-    badAmnt v =
-      "Could not parse the amount " <> v <> " as " <> showUnit unit 1
+    badAmnt v = "Could not parse the amount " <> v <> " as " <> showUnit unit 1
 
 cmdPendingTxs :: Ctx -> Config -> Maybe Text -> Page -> IO Response
 cmdPendingTxs ctx cfg nameM page =
