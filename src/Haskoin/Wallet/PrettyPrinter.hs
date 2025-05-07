@@ -513,6 +513,16 @@ prettyPrinter unit =
     ResponseCoins acc coins -> do
       let net = accountNetwork acc
       renderIO $ vcat $ intersperse (text " ") $ coinPrinter net unit <$> coins
+    ResponseSignMsg m s a -> do
+      renderIO $
+        vcat
+          [ text "-----BEGIN BITCOIN SIGNED MESSAGE-----",
+            text $ cs m,
+            text "-----BEGIN SIGNATURE-----",
+            text $ cs a,
+            text $ cs s,
+            text "-----END BITCOIN SIGNED MESSAGE-----"
+          ]
     ResponseSync xs -> do
       let f (SyncRes acc bh h t c) =
             [ accountPrinter unit acc,

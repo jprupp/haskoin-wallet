@@ -587,6 +587,23 @@ updateAddressBalances net storeBals =
         ]
       where_ $ a ^. DBAddressAddress ==. val addrT
 
+getAddressByText ::
+  (MonadUnliftIO m) =>
+  Text ->
+  ExceptT String (DB m) (DBAccount, DBAddress)
+getAddressByText addrTxt = do
+  resM <- lift $ P.getBy $ UniqueAddress addrTxt
+  case resM of
+    Just (Entity _ addr) -> do
+      let wallet = dBAddressAccountWallet addr
+          deriv = dBAddressAccountDerivation addr
+          accId = DBAccountKey wallet deriv
+      accM <- lift $ P.get accId
+      case accM of
+        Just acc -> return (acc, addr)
+        _ -> throwError "Account does not exist"
+    _ -> throwError "Address does not exist"
+
 insertAddress ::
   (MonadUnliftIO m) =>
   Network ->
@@ -1398,6 +1415,14 @@ pathIndex p =
   case pathToList p of
     [_, i] -> i
     _ -> error "Invalid pathIndex"
+
+addrPath :: DBAddress -> SoftPath
+addrPath addr = f :/ fromIntegral (dBAddressIndex addr)
+  where
+    f =
+      if dBAddressInternal addr
+        then intDeriv
+        else extDeriv
 
 bip44Deriv :: Network -> Natural -> HardPath
 bip44Deriv net a = Deriv :| 44 :| net.bip44Coin :| fromIntegral a

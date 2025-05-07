@@ -4,20 +4,23 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Haskoin.Wallet.Commands where
 
 import Conduit (MonadUnliftIO)
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.Reader (MonadIO (..), MonadTrans (lift))
+import Control.Monad.Reader (MonadIO(..), MonadTrans(lift))
 import Data.Aeson (object, (.:), (.=))
 import qualified Data.Aeson as Json
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as B64
 import Data.Foldable (for_)
 import Data.Maybe (fromMaybe, isJust)
 import Data.String.Conversions (cs)
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
 import Database.Persist.Sqlite (transactionUndo)
 import Haskoin
@@ -86,6 +89,11 @@ data Response
   | ResponseCoins
       { responseAccount :: !DBAccount,
         responseCoins :: ![JsonCoin]
+      }
+  | ResponseSignMsg
+      { responseMessage :: !Text,
+        responseSig :: !Text,
+        responseAddr :: !Text
       }
   | ResponseSync {responseSync :: [SyncRes]}
   | ResponseRestore
@@ -176,6 +184,13 @@ instance MarshalJSON Ctx Response where
             "account" .= a,
             "coins" .= (marshalValue net <$> coins)
           ]
+      ResponseSignMsg m s a -> do
+        object
+          [ "type" .= Json.String "signmsg",
+            "message" .= m,
+            "signature" .= s,
+            "address" .= a
+          ]
       ResponseSync xs -> do
         let f (SyncRes as bb bh tc cc) =
               object
@@ -261,6 +276,11 @@ instance MarshalJSON Ctx Response where
           xs <- o .: "coins"
           coins <- mapM (unmarshalValue (accountNetwork a)) xs
           return $ ResponseCoins a coins
+        "signmsg" -> do
+          m <- o .: "message"
+          s <- o .: "signature"
+          a <- o .: "address"
+          return $ ResponseSignMsg m s a
         "sync" -> do
           xs <- o .: "syncres"
           res <- forM xs $ \x ->
@@ -324,8 +344,8 @@ commandResponse ctx cfg unit cmd =
     CommandLabel nameM i l -> cmdLabel cfg nameM i l
     -- Transaction management
     CommandTxs nameM p -> cmdTxs ctx cfg nameM p
-    CommandPrepareTx rcpts nameM fee dust rcptPay minConf o ->
-      cmdPrepareTx ctx cfg rcpts nameM unit fee dust rcptPay minConf o
+    CommandPrepareTx rcpts nameM fee dust rcptPay minConf o coins ->
+      cmdPrepareTx ctx cfg rcpts nameM unit fee dust rcptPay minConf o coins
     CommandPendingTxs nameM p -> cmdPendingTxs ctx cfg nameM p
     CommandSignTx nameM h i o s -> cmdSignTx ctx cfg nameM h i o s
     CommandSendTx h -> cmdSendTx ctx cfg h
@@ -343,6 +363,7 @@ commandResponse ctx cfg unit cmd =
     CommandDiscoverAcc nameM -> cmdDiscoverAccount ctx cfg nameM
     -- Utilities
     CommandVersion -> cmdVersion cfg
+    CommandSignMsg a m s -> cmdSignMessage ctx cfg a m s
     CommandPrepareSweep nameM prvKey st outputM f d ->
       prepareSweep ctx cfg nameM prvKey st outputM f d
     CommandSignSweep nameM h i o k -> signSweep ctx cfg nameM h i o k
@@ -489,15 +510,18 @@ cmdPrepareTx ::
   Bool ->
   Natural ->
   Maybe FilePath ->
+  [(TxHash, Natural)] ->
   IO Response
-cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM =
+cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM coins =
   runDBResponse cfg $ do
     (accId, acc) <- getAccountByName nameM
     let net = accountNetwork acc
         pub = accountXPubKey ctx acc
+        cControl = (\(a,b) -> OutPoint a (fromIntegral b)) <$> coins
     rcpts <- liftEither $ mapM (toRecipient net) rcpTxt
     gen <- liftIO initStdGen
-    signDat <- buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf
+    signDat <-
+      buildTxSignData net ctx cfg gen accId rcpts feeByte dust rcptPay minConf cControl
     txInfo <- liftEither $ parseTxSignData net ctx pub signDat
     txInfoL <- lift $ fillTxInfoLabels net txInfo
     for_ fileM checkPathFree
@@ -510,8 +534,7 @@ cmdPrepareTx ctx cfg rcpTxt nameM unit feeByte dust rcptPay minConf fileM =
       addr <- textToAddrE net a
       val <- maybeToEither (cs $ badAmnt v) (readAmount unit v)
       return (addr, val)
-    badAmnt v =
-      "Could not parse the amount " <> v <> " as " <> showUnit unit 1
+    badAmnt v = "Could not parse the amount " <> v <> " as " <> showUnit unit 1
 
 cmdPendingTxs :: Ctx -> Config -> Maybe Text -> Page -> IO Response
 cmdPendingTxs ctx cfg nameM page =
@@ -560,6 +583,21 @@ cmdDeleteTx ctx cfg nosigH =
     (coins, addrs) <- deletePendingTx ctx nosigH
     return $ ResponseDeleteTx nosigH coins addrs
 
+cmdSignMessage :: Ctx -> Config -> Text -> Text -> Natural -> IO Response
+cmdSignMessage ctx cfg addrTxt txtMsg splitMnemIn =
+  runDBResponse cfg $ do
+    (acc, addrDB) <- getAddressByText addrTxt
+    let accPub = accountXPubKey ctx acc
+        net = accountNetwork acc
+        idx = fromIntegral $ dBAccountIndex acc
+    mnem <- askMnemonic splitMnemIn
+    accPrvKey <- askPrvKey net ctx idx mnem accPub
+    let addrPrvKey = derivePath ctx (addrPath addrDB) accPrvKey
+        msgHash = sha256 $ encodeUtf8 txtMsg
+        msgSig = signHash ctx addrPrvKey.key msgHash
+        sigB64 = B64.encode msgSig.get
+    return $ ResponseSignMsg txtMsg (cs sigB64) addrTxt
+
 cmdSignTx ::
   Ctx ->
   Config ->
@@ -581,16 +619,31 @@ cmdSignTx ctx cfg nameM nosigHM inputM outputM splitMnemIn =
         idx = fromIntegral $ dBAccountIndex acc
         accPub = accountXPubKey ctx acc
     for_ outputM checkPathFree
-    mnem <- askMnemonicPass splitMnemIn
-    prvKey <- liftEither $ signingKey net ctx mnem idx
-    let xpub = deriveXPubKey ctx prvKey
-    unless (accPub == xpub) $
-      throwError "The mnemonic did not match the provided account"
+    mnem <- askMnemonic splitMnemIn
+    prvKey <- askPrvKey net ctx idx mnem accPub
     (newSignData, txInfo) <- liftEither $ signWalletTx net ctx tsd prvKey
     txInfoL <- lift $ fillTxInfoLabels net txInfo
     when (isJust nosigHM) $ void $ importPendingTx net ctx accId newSignData
     for_ outputM $ \o -> liftIO $ writeJsonFile o $ Json.toJSON newSignData
     return $ ResponseTx acc txInfoL
+
+askPrvKey ::
+  (MonadUnliftIO m) =>
+     Network
+  -> Ctx
+  -> Natural
+  -> MnemonicPass
+  -> XPubKey
+  -> ExceptT String (DB m) XPrvKey
+askPrvKey net ctx idx mnem@(MnemonicPass m _) accPub = do
+  p <- liftIO askPassword1
+  prvKey <- liftEither $ signingKey net ctx (MnemonicPass m $ cs p) idx
+  let xpub = deriveXPubKey ctx prvKey
+  if accPub == xpub
+    then return prvKey
+    else do
+      liftIO $ putStrLn "The passphrase or the mnemonic did not match the account "
+      askPrvKey net ctx idx mnem accPub
 
 parseSignInput ::
   (MonadUnliftIO m) =>
@@ -803,8 +856,8 @@ askMnemonicWords txt = do
       liftIO $ putStrLn "Invalid mnemonic"
       askMnemonicWords txt
 
-askMnemonicPass :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
-askMnemonicPass splitMnemIn = do
+askMnemonic :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
+askMnemonic splitMnemIn = do
   mnm <-
     if splitMnemIn == 1
       then liftIO $ askMnemonicWords "Enter your mnemonic words: "
@@ -812,22 +865,30 @@ askMnemonicPass splitMnemIn = do
         ms <- forM [1 .. splitMnemIn] $ \n ->
           liftIO $ askMnemonicWords $ "Split mnemonic part #" <> show n <> ": "
         liftEither $ mergeMnemonicParts ms
-  passStr <- liftIO askPassword
   return
     MnemonicPass
       { mnemonicWords = mnm,
-        mnemonicPass = cs passStr
+        mnemonicPass = ""
       }
+
+askMnemonicPass :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
+askMnemonicPass splitMnemIn = do
+  mnem <- askMnemonic splitMnemIn
+  passStr <- liftIO askPassword
+  return mnem {mnemonicPass = cs passStr}
 
 askPassword :: IO String
 askPassword = do
-  pass <- askInputLineHidden "Mnemonic passphrase or leave empty: "
+  pass <- askPassword1
   if null pass
     then return pass
     else do
-      pass2 <- askInputLineHidden "Repeat your mnemonic passphrase: "
+      pass2 <- askInputLineHidden "Repeat your mnemonic passphrase   : "
       if pass == pass2
         then return pass
         else do
           putStrLn "The passphrases did not match"
           askPassword
+
+askPassword1 :: IO String
+askPassword1 = askInputLineHidden "Mnemonic passphrase or leave empty: "

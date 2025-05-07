@@ -76,7 +76,8 @@ data Command
         commandDust :: !Natural,
         commandRcptPay :: !Bool,
         commandMinConf :: !Natural,
-        commandOutputFileMaybe :: !(Maybe FilePath)
+        commandOutputFileMaybe :: !(Maybe FilePath),
+        commandCoins :: ![(TxHash, Natural)]
       }
   | CommandPendingTxs
       { commandMaybeAcc :: !(Maybe Text),
@@ -101,6 +102,11 @@ data Command
         commandNoSigHashMaybe :: !(Maybe TxHash),
         commandInputFileMaybe :: !(Maybe FilePath),
         commandOutputFileMaybe :: !(Maybe FilePath),
+        commandSplitIn :: !Natural
+      }
+  | CommandSignMsg
+      { commandAddress :: !Text,
+        commandMessage :: !Text,
         commandSplitIn :: !Natural
       }
   | CommandCoins
@@ -252,6 +258,7 @@ commandParser =
         mconcat
           [ commandGroup "Utilities",
             command "version" versionParser,
+            command "signmsg" signMsgParser,
             command "preparesweep" prepareSweepParser,
             command "signsweep" signSweepParser,
             command "rolldice" rollDiceParser,
@@ -403,7 +410,7 @@ deleteAccParser = do
           <*> networkArg
           <*> fullDerivationOption
   info cmd $
-    progDesc ("Delete an account")
+    progDesc "Delete an account"
       <> footer
         [r|
 Delete an account from the wallet. You must specify the name, the network and
@@ -637,6 +644,7 @@ prepareTxParser = do
           <*> rcptPayOption
           <*> minConfOption
           <*> outputFileMaybeOption
+          <*> some coinOption
   info cmd $
     progDesc "Prepare an unsigned transaction for making a payment"
       <> footer
@@ -678,6 +686,18 @@ Recipient amount. By default, amounts are parsed as bitcoins. You can also use t
 have up to 8 decimal places, bits up to 2 and satoshi are whole numbers.
 |]
 
+coinOption :: Parser (TxHash, Natural)
+coinOption =
+  option (maybeReader f) $
+  short 'c' <>
+  long "coin" <>
+  metavar "TXHASH INT" <> help "Coin control: specify coins to spend"
+  where
+    f s =
+      case words s of
+        [a, b] -> (,) <$> hexToTxHash (cs a) <*> readNatural (cs b)
+        _ -> Nothing
+
 feeOption :: Parser Natural
 feeOption =
   option (maybeReader $ readNatural . cs) $
@@ -709,7 +729,7 @@ rcptPayOption =
 minConfOption :: Parser Natural
 minConfOption =
   option (maybeReader $ readNatural . cs) $
-    short 'c'
+    short 'm'
       <> long "minconf"
       <> metavar "INT"
       <> value 1
@@ -969,6 +989,41 @@ versionParser = do
   let cmd = pure CommandVersion
   info cmd $ progDesc "Display the version of hw"
 
+{- SignMsg Parser -}
+
+signMsgParser :: ParserInfo Command
+signMsgParser = do
+  let cmd =
+        CommandSignMsg
+          <$> signAddressArg
+          <*> signMsgArg
+          <*> splitInOption
+  info cmd $
+    progDescDoc (offline "Sign a user-defined message")
+      <> footer
+        [r|
+Sign a user-defined message using the private key associated with a given
+address.
+|]
+
+signAddressArg :: Parser Text
+signAddressArg =
+  strArgument $
+    metavar "ADDRESS"
+      <> help
+        [r|
+Sign a message using the private key of this address
+|]
+
+signMsgArg :: Parser Text
+signMsgArg =
+  strArgument $
+    metavar "TEXT"
+      <> help
+        [r|
+The message to be signed
+|]
+
 {- PrepareSweep Parser -}
 
 prepareSweepParser :: ParserInfo Command
@@ -1053,7 +1108,7 @@ rollDiceParser :: ParserInfo Command
 rollDiceParser = do
   let cmd = CommandRollDice <$> diceCountArg
   info cmd $
-    progDesc "Roll 6-sided dice using the systems internal entropy"
+    progDescDoc (offline "Roll 6-sided dice using the systems internal entropy")
       <> footer
         [r|
 By default, /dev/random is used on linux machines. The mapping from a byte to
