@@ -583,16 +583,23 @@ cmdSignTx ctx cfg nameM nosigHM inputM outputM splitMnemIn =
         idx = fromIntegral $ dBAccountIndex acc
         accPub = accountXPubKey ctx acc
     for_ outputM checkPathFree
-    mnem <- askMnemonicPass splitMnemIn
-    prvKey <- liftEither $ signingKey net ctx mnem idx
-    let xpub = deriveXPubKey ctx prvKey
-    unless (accPub == xpub) $
-      throwError "The mnemonic did not match the provided account"
+    mnem <- askMnemonic splitMnemIn
+    prvKey <- f net idx mnem accPub
     (newSignData, txInfo) <- liftEither $ signWalletTx net ctx tsd prvKey
     txInfoL <- lift $ fillTxInfoLabels net txInfo
     when (isJust nosigHM) $ void $ importPendingTx net ctx accId newSignData
     for_ outputM $ \o -> liftIO $ writeJsonFile o $ Json.toJSON newSignData
     return $ ResponseTx acc txInfoL
+  where
+    f net idx mnem@(MnemonicPass m _) accPub = do
+      p <- liftIO askPassword1
+      prvKey <- liftEither $ signingKey net ctx (MnemonicPass m $ cs p) idx
+      let xpub = deriveXPubKey ctx prvKey
+      if (accPub == xpub)
+        then return prvKey
+        else do
+          liftIO $ putStrLn "The passphrase or the mnemonic did not match the account "
+          f net idx mnem accPub
 
 parseSignInput ::
   (MonadUnliftIO m) =>
@@ -805,8 +812,8 @@ askMnemonicWords txt = do
       liftIO $ putStrLn "Invalid mnemonic"
       askMnemonicWords txt
 
-askMnemonicPass :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
-askMnemonicPass splitMnemIn = do
+askMnemonic :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
+askMnemonic splitMnemIn = do
   mnm <-
     if splitMnemIn == 1
       then liftIO $ askMnemonicWords "Enter your mnemonic words: "
@@ -814,22 +821,30 @@ askMnemonicPass splitMnemIn = do
         ms <- forM [1 .. splitMnemIn] $ \n ->
           liftIO $ askMnemonicWords $ "Split mnemonic part #" <> show n <> ": "
         liftEither $ mergeMnemonicParts ms
-  passStr <- liftIO askPassword
   return
     MnemonicPass
       { mnemonicWords = mnm,
-        mnemonicPass = cs passStr
+        mnemonicPass = ""
       }
+
+askMnemonicPass :: (MonadError String m, MonadIO m) => Natural -> m MnemonicPass
+askMnemonicPass splitMnemIn = do
+  mnem <- askMnemonic splitMnemIn
+  passStr <- liftIO askPassword
+  return mnem {mnemonicPass = cs passStr}
 
 askPassword :: IO String
 askPassword = do
-  pass <- askInputLineHidden "Mnemonic passphrase or leave empty: "
+  pass <- askPassword1
   if null pass
     then return pass
     else do
-      pass2 <- askInputLineHidden "Repeat your mnemonic passphrase: "
+      pass2 <- askInputLineHidden "Repeat your mnemonic passphrase   : "
       if pass == pass2
         then return pass
         else do
           putStrLn "The passphrases did not match"
           askPassword
+
+askPassword1 :: IO String
+askPassword1 = askInputLineHidden "Mnemonic passphrase or leave empty: "
