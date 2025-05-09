@@ -1,24 +1,19 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.38.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9116a79fadeda74fae2b68d64a0e5f2238c4a15063a31723f79267b09cb3eef6
+-- hash: 3e39505c3793edd3fb6ec57bd710521a7ac480b59144d1b82744f777acfbf6d8
 
 name:           haskoin-wallet
-version:        0.9.3
-synopsis:       Lightweight command-line wallet for Bitcoin and Bitcoin Cash
-description:    haskoin-wallet (hw) is a lightweight Bitcoin wallet using BIP39 mnemonics and
-                BIP44 account structure. It requires a full blockchain index such as
-                haskoin-store to query balances and unspent outputs. The wallet can both build
-                transactions in read-only (xpub-only) mode and sign them in an offline
-                environment.
+version:        0.9.4
+synopsis:       Lightweight CLI wallet for Bitcoin and Bitcoin Cash
+description:    Lightweight command-line interface offline-friendly hierarchical-deterministic BTC/BCH wallet compatible with BIP44 and BIP39.
 category:       Bitcoin, Finance, Network
 homepage:       http://github.com/haskoin/haskoin-wallet
 bug-reports:    http://github.com/haskoin/haskoin-wallet/issues
-author:         Philippe Laprade,
-                Jean-Pierre Rupp
+author:         JP Rupp
 maintainer:     jprupp@protonmail.ch
 license:        PublicDomain
 license-file:   UNLICENSE
@@ -67,7 +62,6 @@ library
     , string-conversions >=0.4.0.1
     , text >=1.2.4.0
     , time >=1.12.2
-    , tostring >=0.2.1.1
     , transformers >=0.5.6.2
     , unordered-containers >=0.2.10.0
     , wreq >=0.5.3.2
@@ -117,7 +111,7 @@ executable hw
     , haskeline >=0.7.5.0
     , haskoin-core >=1.0.4
     , haskoin-store-data >=1.2.2
-    , haskoin-wallet ==0.9.3
+    , haskoin-wallet
     , http-types >=0.12.3
     , lens >=4.18.1
     , lens-aeson >=1.1
@@ -134,7 +128,6 @@ executable hw
     , string-conversions >=0.4.0.1
     , text >=1.2.4.0
     , time >=1.12.2
-    , tostring >=0.2.1.1
     , transformers >=0.5.6.2
     , unordered-containers >=0.2.10.0
     , wreq >=0.5.3.2
@@ -177,7 +170,7 @@ test-suite spec
     , haskeline >=0.7.5.0
     , haskoin-core >=1.0.4
     , haskoin-store-data >=1.2.2
-    , haskoin-wallet ==0.9.3
+    , haskoin-wallet
     , hspec >=2.7.1
     , http-types >=0.12.3
     , lens >=4.18.1
@@ -195,7 +188,6 @@ test-suite spec
     , string-conversions >=0.4.0.1
     , text >=1.2.4.0
     , time >=1.12.2
-    , tostring >=0.2.1.1
     , transformers >=0.5.6.2
     , unordered-containers >=0.2.10.0
     , wreq >=0.5.3.2

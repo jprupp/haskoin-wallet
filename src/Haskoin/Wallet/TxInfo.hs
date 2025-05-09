@@ -19,8 +19,6 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Serialize as S
-import Data.String.Conversions (cs)
-import Data.String.ToString (ToString (..))
 import Data.Text (Text)
 import Haskoin
 import qualified Haskoin.Store.Data as Store
@@ -31,15 +29,12 @@ import Numeric.Natural (Natural)
 data TxType = TxDebit | TxInternal | TxCredit
   deriving (Show, Eq)
 
-instance ToString TxType where
-  toString =
-    \case
+instance Json.ToJSON TxType where
+  toJSON =
+    Json.String . \case
       TxDebit -> "debit"
       TxInternal -> "internal"
       TxCredit -> "credit"
-
-instance Json.ToJSON TxType where
-  toJSON = Json.String . cs . toString
 
 instance Json.FromJSON TxType where
   parseJSON =

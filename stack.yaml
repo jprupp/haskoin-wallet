@@ -1,18 +1,6 @@
-resolver: nightly-2023-08-02
+resolver: lts-23.21
 nix:
   packages:
   - zlib
   - secp256k1
   - pkg-config
-extra-deps:
-  - git: https://github.com/haskoin/haskoin-core.git
-    commit: 09f8fbbd4fc02ba1538c2be04d8fea5339737e6e
-  - git: https://github.com/haskoin/haskoin-store.git
-    commit: 8466ea2f54d7728aff9417b4d52e829450952fd0
-    subdirs:
-    - data
-  - git: https://github.com/haskoin/secp256k1-haskell.git
-    commit: 17cfeb3ed3c610704fddbb86c276c728d3613521
-    subdirs:
-    - secp256k1-haskell
-  - scotty-0.20@sha256:f9b3f21773f813e92e41a6b5eee1fbefbbe0c695ac5259413500270ec0847151,5292
