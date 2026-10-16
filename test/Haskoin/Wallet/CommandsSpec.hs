@@ -31,8 +31,8 @@ import Haskoin.Wallet.TxInfo
 import Haskoin.Wallet.Util
 import Test.Hspec
 
-identityTests :: Ctx -> IdentityTests
-identityTests ctx =
+identityTests :: Network -> Ctx -> IdentityTests
+identityTests net ctx =
   def
     { jsonTests =
         [ JsonBox $ arbitraryDBAccount btc ctx,
@@ -42,11 +42,11 @@ identityTests ctx =
           JsonBox arbitraryConfig
         ],
       marshalJsonTests =
-        [ MarshalJsonBox ((btc,) <$> arbitraryJsonCoin),
+        [ MarshalJsonBox ((btc,) <$> arbitraryJsonCoin net),
           MarshalJsonBox ((ctx,) <$> arbitraryPubKeyDoc ctx),
           MarshalJsonBox (((btc, ctx),) <$> arbitraryTxInfo btc ctx),
           MarshalJsonBox ((ctx,) <$> arbitraryResponse btc ctx),
-          MarshalJsonBox ((ctx,) <$> arbitraryAccountBackup ctx)
+          MarshalJsonBox ((ctx,) <$> arbitraryAccountBackup net ctx)
         ]
     }
 
@@ -54,7 +54,7 @@ spec :: Spec
 spec = do
   let cfg = def :: Config
   prepareContext $ \ctx -> do
-    testIdentity $ identityTests ctx
+    testIdentity $ identityTests btc ctx
     describe "Database" $ do
       bestSpec
       accountSpec ctx

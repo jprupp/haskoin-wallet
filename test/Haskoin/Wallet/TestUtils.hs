@@ -72,7 +72,7 @@ arbitraryDBAccount net ctx =
     <$> arbitraryText
     <*> (DBWalletKey . fingerprintToText <$> arbitraryFingerprint)
     <*> arbitraryPositive
-    <*> (cs . (.name) <$> arbitraryNetwork)
+    <*> return (cs net.name)
     <*> (cs . pathToStr <$> arbitraryDerivPath)
     <*> arbitraryPositive
     <*> arbitraryPositive
@@ -89,7 +89,7 @@ arbitraryDBAddress net =
     <*> (DBWalletKey . fingerprintToText <$> arbitraryFingerprint)
     <*> (cs . pathToStr <$> arbitraryDerivPath)
     <*> (cs . pathToStr <$> arbitraryDerivPath)
-    <*> (fromJust . addrToText net <$> arbitraryAddress)
+    <*> (fromJust . addrToText net <$> arbitraryAddress net)
     <*> arbitraryText
     <*> arbitraryPositive
     <*> arbitraryPositive
@@ -109,11 +109,11 @@ arbitraryAddressBalance =
     <*> arbitraryPositive
     <*> arbitraryPositive
 
-arbitraryJsonCoin :: Gen JsonCoin
-arbitraryJsonCoin =
+arbitraryJsonCoin :: Network -> Gen JsonCoin
+arbitraryJsonCoin net =
   JsonCoin
     <$> arbitraryOutPoint
-    <*> arbitraryAddress
+    <*> arbitraryAddress net
     <*> arbitraryPositive
     <*> arbitraryBlockRef
     <*> arbitraryNatural
@@ -160,19 +160,19 @@ arbitraryOtherInputs net ctx =
 arbitraryTxType :: Gen TxType
 arbitraryTxType = oneof [pure TxDebit, pure TxInternal, pure TxCredit]
 
-arbitraryStoreOutput :: Gen Store.StoreOutput
-arbitraryStoreOutput =
+arbitraryStoreOutput :: Network -> Gen Store.StoreOutput
+arbitraryStoreOutput net =
   Store.StoreOutput
     <$> arbitrary
     <*> arbitraryBS1
     <*> arbitraryMaybe arbitrarySpender
-    <*> arbitraryMaybe arbitraryAddress
+    <*> arbitraryMaybe (arbitraryAddress net)
 
 arbitrarySpender :: Gen Store.Spender
 arbitrarySpender = Store.Spender <$> arbitraryTxHash <*> arbitrary
 
-arbitraryStoreInput :: Gen Store.StoreInput
-arbitraryStoreInput =
+arbitraryStoreInput :: Network -> Gen Store.StoreInput
+arbitraryStoreInput net =
   oneof
     [ Store.StoreCoinbase
         <$> arbitraryOutPoint
@@ -186,7 +186,7 @@ arbitraryStoreInput =
         <*> arbitraryBS1
         <*> arbitrary
         <*> listOf arbitraryBS1
-        <*> arbitraryMaybe arbitraryAddress
+        <*> arbitraryMaybe (arbitraryAddress net)
     ]
 
 arbitraryTxInfo :: Network -> Ctx -> Gen TxInfo
@@ -198,25 +198,25 @@ arbitraryTxInfo net ctx =
     <*> ( Map.fromList
             <$> resize
               10
-              (listOf $ (,) <$> arbitraryAddress <*> arbitraryMyOutputs)
+              (listOf $ (,) <$> arbitraryAddress net <*> arbitraryMyOutputs)
         )
     <*> ( Map.fromList
             <$> resize
               10
-              (listOf $ (,) <$> arbitraryAddress <*> arbitraryNatural)
+              (listOf $ (,) <$> arbitraryAddress net <*> arbitraryNatural)
         )
-    <*> resize 10 (listOf arbitraryStoreOutput)
+    <*> resize 10 (listOf $ arbitraryStoreOutput net)
     <*> ( Map.fromList
             <$> resize
               10
-              (listOf $ (,) <$> arbitraryAddress <*> arbitraryMyInputs net ctx)
+              (listOf $ (,) <$> arbitraryAddress net <*> arbitraryMyInputs net ctx)
         )
     <*> ( Map.fromList
             <$> resize
               10
-              (listOf $ (,) <$> arbitraryAddress <*> arbitraryOtherInputs net ctx)
+              (listOf $ (,) <$> arbitraryAddress net <*> arbitraryOtherInputs net ctx)
         )
-    <*> resize 10 (listOf arbitraryStoreInput)
+    <*> resize 10 (listOf $ arbitraryStoreInput net)
     <*> arbitraryNatural
     <*> arbitraryNatural
     <*> arbitraryNatural
@@ -231,19 +231,19 @@ arbitraryTxInfoPending =
     <*> arbitrary
     <*> arbitrary
 
-arbitraryAccountBackup :: Ctx -> Gen AccountBackup
-arbitraryAccountBackup ctx =
+arbitraryAccountBackup :: Network -> Ctx -> Gen AccountBackup
+arbitraryAccountBackup net ctx =
   AccountBackup
     <$> arbitraryText
     <*> arbitraryFingerprint
     <*> arbitraryXPubKey ctx
-    <*> arbitraryNetwork
+    <*> return net
     <*> arbitraryNatural
     <*> arbitraryNatural
     <*> ( Map.fromList
-            <$> resize 20 (listOf $ (,) <$> arbitraryAddress <*> arbitraryText)
+            <$> resize 20 (listOf $ (,) <$> arbitraryAddress net <*> arbitraryText)
         )
-    <*> resize 20 (listOf arbitraryAddress)
+    <*> resize 20 (listOf $ arbitraryAddress net)
     <*> arbitraryUTCTime
 
 arbitrarySyncRes :: Network -> Ctx -> Gen SyncRes
@@ -284,7 +284,7 @@ arbitraryResponse net ctx =
         <*> arbitraryNatural,
       ResponseCoins
         <$> arbitraryDBAccount net ctx
-        <*> resize 20 (listOf arbitraryJsonCoin),
+        <*> resize 20 (listOf $ arbitraryJsonCoin net),
       ResponseSync
         <$> (resize 10 $ listOf $ arbitrarySyncRes net ctx),
       ResponseRestore

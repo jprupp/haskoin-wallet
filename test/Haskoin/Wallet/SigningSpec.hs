@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Haskoin.Wallet.SigningSpec where
 
@@ -24,6 +25,7 @@ import Haskoin.Wallet.TxInfo
 import Numeric.Natural (Natural)
 import System.Random (StdGen, mkStdGen)
 import Test.Hspec
+import GHC.IO.Handle (hGetChar)
 
 spec :: Spec
 spec =
@@ -281,7 +283,7 @@ signWalletTxSpec ctx =
                       (extDeriv :/ 0)
                       ""
                       [ SigInput
-                          (PayPKHash (addr' 0).hash160)
+                          (PayPKHash $ addrHash160 (addr' 0))
                           100000000
                           (OutPoint (txHash fundTx) 0)
                           sigHashAll
@@ -396,6 +398,14 @@ signWalletTxSpec ctx =
 
 -- Test Helpers --
 
+addrHash160 :: Address -> Hash160
+addrHash160 =
+  \case
+    PubKeyAddress h -> h
+    ScriptAddress h -> h
+    WitnessPubKeyAddress h -> h
+    _ -> undefined
+
 tx' :: Ctx -> [(TxHash, Word32)] -> [(Address, Natural)] -> Tx
 tx' ctx xs ys = Tx 1 txi txo [] 0
   where
@@ -403,7 +413,7 @@ tx' ctx xs ys = Tx 1 txi txo [] 0
       fmap
         (\(h, p) -> TxIn (OutPoint h p) BS.empty maxBound)
         xs
-    f = marshal ctx . PayPKHash . (.hash160)
+    f = marshal ctx . PayPKHash . addrHash160
     txo = fmap (\(a, v) -> TxOut v $ f a) (Control.Arrow.second fromIntegral <$> ys)
 
 txid' :: Word8 -> TxHash
@@ -431,7 +441,7 @@ coin' ctx (h, p) hM a v =
         maybe (Store.MemRef 0) ((`Store.BlockRef` 0) . fromIntegral) hM,
       Store.outpoint = OutPoint h p,
       Store.value = fromIntegral v,
-      Store.script = marshal ctx $ PayPKHash $ (.hash160) a,
+      Store.script = marshal ctx $ PayPKHash $ addrHash160 a,
       Store.address = Just a
     }
 
