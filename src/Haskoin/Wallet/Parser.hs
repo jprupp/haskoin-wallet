@@ -644,7 +644,7 @@ prepareTxParser = do
           <*> rcptPayOption
           <*> minConfOption
           <*> outputFileMaybeOption
-          <*> some coinOption
+          <*> many coinOption
   info cmd $
     progDesc "Prepare an unsigned transaction for making a payment"
       <> footer
