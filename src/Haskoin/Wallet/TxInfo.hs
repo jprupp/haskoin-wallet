@@ -304,12 +304,16 @@ txInAddressMap net ctx ins =
       case scriptToAddressBS ctx s of
         Left _ -> Left [(op, to)]
         Right a ->
-          Right
-            ( a,
-              ( fromIntegral v,
-                [SigInput (addressToOutput a) v op sh Nothing]
-              )
-            )
+          case addressToOutput a of
+            Just o ->
+              Right
+                ( a,
+                  ( fromIntegral v,
+                  [SigInput o v op sh Nothing]
+                  )
+                )
+            _ -> Left [(op, to)]
+          
 
 maybeSetForkId :: Network -> SigHash -> SigHash
 maybeSetForkId net

@@ -31,8 +31,8 @@ import Haskoin.Wallet.TxInfo
 import Haskoin.Wallet.Util
 import Test.Hspec
 
-identityTests :: Ctx -> IdentityTests
-identityTests ctx =
+identityTests :: Network -> Ctx -> IdentityTests
+identityTests net ctx =
   def
     { jsonTests =
         [ JsonBox $ arbitraryDBAccount btc ctx,
@@ -42,11 +42,11 @@ identityTests ctx =
           JsonBox arbitraryConfig
         ],
       marshalJsonTests =
-        [ MarshalJsonBox ((btc,) <$> arbitraryJsonCoin),
+        [ MarshalJsonBox ((btc,) <$> arbitraryJsonCoin net),
           MarshalJsonBox ((ctx,) <$> arbitraryPubKeyDoc ctx),
           MarshalJsonBox (((btc, ctx),) <$> arbitraryTxInfo btc ctx),
           MarshalJsonBox ((ctx,) <$> arbitraryResponse btc ctx),
-          MarshalJsonBox ((ctx,) <$> arbitraryAccountBackup ctx)
+          MarshalJsonBox ((ctx,) <$> arbitraryAccountBackup net ctx)
         ]
     }
 
@@ -54,7 +54,7 @@ spec :: Spec
 spec = do
   let cfg = def :: Config
   prepareContext $ \ctx -> do
-    testIdentity $ identityTests ctx
+    testIdentity $ identityTests btc ctx
     describe "Database" $ do
       bestSpec
       accountSpec ctx
@@ -580,7 +580,7 @@ pendingTxsSpec ctx cfg =
       liftTest $ c `shouldBe` 2
       let jsonCoin1 = forceRight $ toJsonCoin btc Nothing (head dbCoins)
           jsonCoin2 = forceRight $ toJsonCoin btc Nothing (dbCoins !! 1)
-      tsd <- buildTxSignData btc ctx cfg gen accId [(oAddr' 0, 8)] 0 0 False 1
+      tsd <- buildTxSignData btc ctx cfg gen accId [(oAddr' 0, 8)] 0 0 False 1 []
       liftTest $
         tsd
           `shouldBe` TxSignData
@@ -613,12 +613,12 @@ pendingTxsSpec ctx cfg =
       (dBAddressIndex <$> nextFreeIntAddr ctx cfg accId) `dbShouldBeE` 2
       lift $
         shouldBeLeft' "chooseCoins: No solution found" $
-          buildTxSignData btc ctx cfg gen accId [(oAddr' 1, 12)] 0 0 False 1
+          buildTxSignData btc ctx cfg gen accId [(oAddr' 1, 12)] 0 0 False 1 []
       lift $
         shouldBeLeft' "The transaction already exists" $
           importPendingTx btc ctx accId tsd
       -- Create second pending transaction
-      tsd2 <- buildTxSignData btc ctx cfg gen accId [(oAddr' 1, 7)] 0 0 False 1
+      tsd2 <- buildTxSignData btc ctx cfg gen accId [(oAddr' 1, 7)] 0 0 False 1 []
       liftTest $
         tsd2
           `shouldBe` TxSignData
@@ -650,7 +650,7 @@ pendingTxsSpec ctx cfg =
       (dBAddressIndex <$> nextFreeIntAddr ctx cfg accId) `dbShouldBeE` 3
       lift $
         shouldBeLeft' "chooseCoins: No solution found" $
-          buildTxSignData btc ctx cfg gen accId [(oAddr' 2, 1)] 0 0 False 1
+          buildTxSignData btc ctx cfg gen accId [(oAddr' 2, 1)] 0 0 False 1 []
       -- Delete first transaction
       deletePendingTx ctx h1 `dbShouldBeE` (1, 1)
       coinPage btc accId (Page 5 0)
@@ -664,7 +664,7 @@ pendingTxsSpec ctx cfg =
       checkFree 2 False
       (dBAddressIndex <$> nextFreeIntAddr ctx cfg accId) `dbShouldBeE` 1
       -- Create transaction with no change
-      tsd3 <- buildTxSignData btc ctx cfg gen accId [(oAddr' 2, 20)] 0 0 False 1
+      tsd3 <- buildTxSignData btc ctx cfg gen accId [(oAddr' 2, 20)] 0 0 False 1 []
       liftTest $
         tsd3
           `shouldBe` TxSignData

@@ -26,28 +26,6 @@ hw --help
 hw COMMAND --help
 ```
 
-## Verify release binaries
-
-### Get the GPG key
-
-```console
-gpg --recv-keys 5E98C15CC51B3E9EF0D40EA61690774F742FEAC4
-gpg --list-keys --fingerprint 5E98C15CC51B3E9EF0D40EA61690774F742FEAC4
-```
-
-Make sure the key fingerprint matches this string:
-
-```console
-5E98 C15C C51B 3E9E F0D4  0EA6 1690 774F 742F EAC4
-```
-
-### Verify the signature file and hashes
-
-```console
-gpg --verify SHA256SUMS.asc
-sha256sum --check SHA256SUMS
-```
-
 ## Critical Bugs
 
 * Versions prior to 0.8.0 do not derive the correct accounts when using more

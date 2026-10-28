@@ -1,18 +1,16 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.38.0.
+-- This file has been generated from package.yaml by hpack version 0.39.6.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: 3e39505c3793edd3fb6ec57bd710521a7ac480b59144d1b82744f777acfbf6d8
 
 name:           haskoin-wallet
-version:        0.9.4
+version:        0.9.5
 synopsis:       Lightweight CLI wallet for Bitcoin and Bitcoin Cash
 description:    Lightweight command-line interface offline-friendly hierarchical-deterministic BTC/BCH wallet compatible with BIP44 and BIP39.
 category:       Bitcoin, Finance, Network
-homepage:       http://github.com/haskoin/haskoin-wallet
-bug-reports:    http://github.com/haskoin/haskoin-wallet/issues
+homepage:       http://github.com/jprupp/haskoin-wallet
+bug-reports:    http://github.com/jprupp/haskoin-wallet/issues
 author:         JP Rupp
 maintainer:     jprupp@protonmail.ch
 license:        PublicDomain
@@ -24,6 +22,26 @@ source-repository head
   location: https://github.com/haskoin/haskoin-wallet.git
 
 library
+  exposed-modules:
+      Haskoin.Wallet
+      Haskoin.Wallet.Amounts
+      Haskoin.Wallet.Backup
+      Haskoin.Wallet.Commands
+      Haskoin.Wallet.Config
+      Haskoin.Wallet.Database
+      Haskoin.Wallet.Entropy
+      Haskoin.Wallet.FileIO
+      Haskoin.Wallet.Main
+      Haskoin.Wallet.Migration
+      Haskoin.Wallet.Migration.SemVersion
+      Haskoin.Wallet.Migration.V0_9_0
+      Haskoin.Wallet.Parser
+      Haskoin.Wallet.PrettyPrinter
+      Haskoin.Wallet.Signing
+      Haskoin.Wallet.TxInfo
+      Haskoin.Wallet.Util
+  other-modules:
+      Paths_haskoin_wallet
   hs-source-dirs:
       src
   ghc-options: -Wall
@@ -65,30 +83,12 @@ library
     , transformers >=0.5.6.2
     , unordered-containers >=0.2.10.0
     , wreq >=0.5.3.2
-  exposed-modules:
-      Haskoin.Wallet
-      Haskoin.Wallet.Amounts
-      Haskoin.Wallet.Backup
-      Haskoin.Wallet.Commands
-      Haskoin.Wallet.Config
-      Haskoin.Wallet.Database
-      Haskoin.Wallet.Entropy
-      Haskoin.Wallet.FileIO
-      Haskoin.Wallet.Main
-      Haskoin.Wallet.Migration
-      Haskoin.Wallet.Migration.SemVersion
-      Haskoin.Wallet.Migration.V0_9_0
-      Haskoin.Wallet.Parser
-      Haskoin.Wallet.PrettyPrinter
-      Haskoin.Wallet.Signing
-      Haskoin.Wallet.TxInfo
-      Haskoin.Wallet.Util
-  other-modules:
-      Paths_haskoin_wallet
   default-language: Haskell2010
 
 executable hw
   main-is: Main.hs
+  other-modules:
+      Paths_haskoin_wallet
   hs-source-dirs:
       app
   ghc-options: -Wall
@@ -131,8 +131,6 @@ executable hw
     , transformers >=0.5.6.2
     , unordered-containers >=0.2.10.0
     , wreq >=0.5.3.2
-  other-modules:
-      Paths_haskoin_wallet
   default-language: Haskell2010
 
 test-suite spec

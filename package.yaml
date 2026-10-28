@@ -1,5 +1,5 @@
 name: haskoin-wallet
-version: 0.9.4
+version: 0.9.5
 synopsis: Lightweight CLI wallet for Bitcoin and Bitcoin Cash
 description:
   Lightweight command-line interface offline-friendly 
@@ -11,8 +11,8 @@ maintainer: jprupp@protonmail.ch
 license: PublicDomain
 license-file: UNLICENSE
 github: haskoin/haskoin-wallet.git
-homepage: http://github.com/haskoin/haskoin-wallet
-bug-reports: http://github.com/haskoin/haskoin-wallet/issues
+homepage: http://github.com/jprupp/haskoin-wallet
+bug-reports: http://github.com/jprupp/haskoin-wallet/issues
 dependencies:
   - base >=4.9 && <5
   - aeson >= 1.4.6.0
